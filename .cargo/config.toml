@@ -1,0 +1,12 @@
+[build]
+rustflags = [
+    "--emit=asm",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "debuginfo=full",
+    "-C",
+    "symbol-mangling-version=v0",
+    "-C",
+    "llvm-args=--x86-asm-syntax=intel",
+]
