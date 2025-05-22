@@ -1,0 +1,27 @@
+[package]
+name = "schmimmdee"
+version = "0.1.0"
+edition = "2024"
+authors = ["jer <alphastrata@gmail.com>"]
+
+[dependencies]
+rand = "0.9.1"
+image = "0.24"
+rayon = "1.10.0"
+
+[[bin]]
+name = "minmax"
+path = "bins/minmax.rs"
+
+[[bin]]
+name = "string-pattern"
+path = "bins/stringpattern.rs"
+
+[[bin]]
+name = "histogram"
+path = "bins/histogram.rs"
+
+
+[[bin]]
+name = "greyscale"
+path = "bins/greyscale.rs"
