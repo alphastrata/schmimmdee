@@ -1,8 +1,20 @@
+# SIMD experiments
+
 This is just a resource for a blog post on SIMD.
 
-In a nutshell, it compraes a SIMD and Scalar min/max finding functions on increasingly larger arrays of `f32`s.
+The `./bins` directory contains all the experiments.
+
+<br>
+
+# minmax
+
+Usage: `cargo run -r --bin minmax`
+
+Compare SIMD and Scalar min/max finding functions on increasingly larger arrays of `f32`s.
 
 Results:
+> 2013 Macbook Pro
+
 |     Elements |          Scalar |            SIMD |    Speedup |
 |--------------|-----------------|-----------------|------------|
 |          1e3 |          2.57μs |        519.18ns |      4.96x |
@@ -12,12 +24,28 @@ Results:
 |          1e7 |         21.38ms |          4.73ms |      4.51x |
 |          1e8 |        213.87ms |         51.53ms |      4.15x |
 
-> 2013 Macbook Pro
 
-NOTE that it has specific `rustflags` set in the `./cargo/config.toml` for studying the Assembly.
+---
+<br>
+
+> Ryzen 5950x
+
+|     Elements |          Scalar |            SIMD |    Speedup |
+|--------------|-----------------|-----------------|------------|
+|          1e3 |        937.00ns |        182.00ns |      5.15x |
+|          1e4 |          9.34μs |          1.60μs |      5.84x |
+|          1e5 |         88.22μs |         15.29μs |      5.77x |
+|          1e6 |        905.53μs |        156.50μs |      5.79x |
+|          1e7 |          9.20ms |          2.12ms |      4.35x |
+|          1e8 |         90.77ms |         22.10ms |      4.11x |
+
+---
+<br>
+
+**NOTE** that it has specific `rustflags` set in the `./cargo/config.toml` for studying the Assembly.
 i.e 
 ```sh
-cargo build -r
+cargo build -r --bin minmax
 cat target/release/deps/schmimmdee-cd6afcb096a75bb5.s
 ```
 - the hash will be different for every build.
@@ -66,5 +94,3 @@ Ltmp47:
 	movaps	xmm7, xmm5
 	movaps	xmm6, xmm5
 ```
-
-Because I'm interested in it.
