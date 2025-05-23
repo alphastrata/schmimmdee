@@ -4,15 +4,14 @@ This is just a resource for a blog post on SIMD.
 
 The `./bins` directory contains all the experiments.
 
-<br>
-
 # minmax
 
 Usage: `cargo run -r --bin minmax`
 
 Compare SIMD and Scalar min/max finding functions on increasingly larger arrays of `f32`s.
 
-Results:
+<details><summary>Results:</summary>
+
 > i7-4960HQ
 
 |     Elements |          Scalar |            SIMD |    Speedup |
@@ -25,7 +24,6 @@ Results:
 |          1e8 |        213.87ms |         51.53ms |      4.15x |
 
 
----
 <br>
 
 > Ryzen 5950x
@@ -39,8 +37,12 @@ Results:
 |          1e7 |          9.20ms |          2.12ms |      4.35x |
 |          1e8 |         90.77ms |         22.10ms |      4.11x |
 
----
+
+</details>
 <br>
+
+---
+
 
 **NOTE** that it has specific `rustflags` set in the `./cargo/config.toml` for studying the Assembly.
 i.e 
