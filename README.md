@@ -13,7 +13,7 @@ Usage: `cargo run -r --bin minmax`
 Compare SIMD and Scalar min/max finding functions on increasingly larger arrays of `f32`s.
 
 Results:
-> 2013 Macbook Pro
+> i7-4960HQ
 
 |     Elements |          Scalar |            SIMD |    Speedup |
 |--------------|-----------------|-----------------|------------|
