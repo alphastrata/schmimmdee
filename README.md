@@ -44,6 +44,17 @@ Compare SIMD and Scalar min/max finding functions on increasingly larger arrays 
 ---
 
 
+# searching-pattern
+Uses this dataset: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
+(A list of the `titles` of all wikipedia articles).
+
+
+
+
+
+
+# NOTES
+
 **NOTE** that it has specific `rustflags` set in the `./cargo/config.toml` for studying the Assembly.
 i.e 
 ```sh
