@@ -48,6 +48,28 @@ Compare SIMD and Scalar min/max finding functions on increasingly larger arrays 
 Uses this dataset: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
 (A list of the `titles` of all wikipedia articles).
 
+<details><summary>Results:</summary>
+
+
+> 'Path of Exile 2'  
+
+|       Method |         Std Lib |            SIMD |    Speedup |      Valid |
+|--------------|-----------------|-----------------|------------|------------|
+|         find |        128.90ms |         48.90ms |      2.64x |         ✓ |
+
+> 'AVX-512'  
+
+|       Method |         Std Lib |            SIMD |    Speedup |      Valid |
+|--------------|-----------------|-----------------|------------|------------|
+|         find |          7.75ms |          8.56ms |      0.90x |         ✓ |
+
+> 'Bannana'
+
+|       Method |         Std Lib |            SIMD |    Speedup |      Valid |
+|--------------|-----------------|-----------------|------------|------------|
+|         find |         10.16ms |          9.21ms |      1.10x |         ✓ |
+
+</details>
 
 
 
