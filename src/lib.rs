@@ -5,7 +5,7 @@ use std::{
 };
 
 /// Update this to reflect the width of YOUR system's registers.
-const LOGICAL_LANES: usize = 16;
+const LOGICAL_LANES: usize = 4; // Auto-detected for x86_64-pc-windows-msvc
 
 /// prettly-formant nanos from our std::instant timming.
 pub fn format_ns(ns: f64) -> String {
