@@ -1,4 +1,7 @@
-use schmimmdee::{format_ns, format_number, simd_histogram_single};
+use schmimmdee::{
+    format_ns, format_number, simd_histogram_parallel,
+    simd_histogram_single,
+};
 use std::{collections::HashMap, fs, hint::black_box, path::Path, time::Instant};
 
 fn main() {
@@ -24,7 +27,7 @@ fn main() {
     };
 
     println!("Processing data...");
-    let processed_data = raw_data.replace('\n', " ").replace('_', " ");
+    let processed_data = raw_data.replace(['\n', '_'], " ");
 
     // Step 1: Create word count HashMap
     println!("\nCreating word counts...");
@@ -70,8 +73,10 @@ fn main() {
         for _ in 0..3 {
             let mut warmup_hist1 = [0u32; 256];
             let mut warmup_hist2 = [0u32; 256];
-            black_box(standard_histogram(data_slice, &mut warmup_hist1));
-            black_box(simd_histogram_single(data_slice, &mut warmup_hist2));
+            standard_histogram(data_slice, &mut warmup_hist1);
+            black_box(());
+            simd_histogram_single(data_slice, &mut warmup_hist2);
+            black_box(());
         }
 
         // Benchmark standard version
@@ -79,7 +84,8 @@ fn main() {
             .map(|_| {
                 let mut hist = [0u32; 256];
                 let start = Instant::now();
-                black_box(standard_histogram(data_slice, &mut hist));
+                standard_histogram(data_slice, &mut hist);
+                black_box(());
                 start.elapsed().as_nanos()
             })
             .sum();
@@ -89,7 +95,8 @@ fn main() {
             .map(|_| {
                 let mut hist = [0u32; 256];
                 let start = Instant::now();
-                black_box(simd_histogram_single(data_slice, &mut hist));
+                simd_histogram_single(data_slice, &mut hist);
+                black_box(());
                 start.elapsed().as_nanos()
             })
             .sum();
@@ -101,9 +108,10 @@ fn main() {
 
         // Verify results match
         let mut std_hist = [0u32; 256];
-        let mut simd_hist = [0u32; 256];
+        let simd_hist = [0u32; 256];
         standard_histogram(data_slice, &mut std_hist);
-        simd_histogram_single(data_slice, &mut simd_hist);
+        // simd_histogram_unsafe(data_slice, &mut simd_hist); // WORSE!
+        simd_histogram_parallel(data_slice, &mut [simd_hist]);
         let valid = std_hist == simd_hist;
 
         // Print formatted results

@@ -8,6 +8,9 @@ use std::{
     },
 };
 
+use rayon::iter::IndexedParallelIterator;
+use rayon::prelude::*;
+
 /// Update this to reflect the width of YOUR system's registers.
 const LOGICAL_LANES: usize = 4; // Auto-detected for x86_64-pc-windows-msvc
 
@@ -211,7 +214,7 @@ fn simd_find_byte(haystack: &[u8], target: u8) -> Option<usize> {
 
 /// Convert RGBA (`[u8;4]`) to grayscale (`[u8;3]`) using SIMD.
 pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
-    const LANES: usize = LOGICAL_LANES; // Process 16 pixels at once (AVX2-friendly)
+    const LANES: usize = LOGICAL_LANES * 4; // Process 16 pixels at once (AVX2-friendly)
     let mut output = Vec::with_capacity(rgba.len());
 
     // Weights scaled to fixed-point precision (0.2126 ≈ 54/255, etc.)
@@ -256,55 +259,114 @@ pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
 }
 
 pub fn simd_histogram_single(data: &[u8], histogram: &mut [u32; 256]) {
-    let chunks = data.chunks_exact(LOGICAL_LANES);
-    let remainder = chunks.remainder();
+    // Process in larger chunks for better memory access patterns
+    const BLOCK_SIZE: usize = 4096;
 
-    // Process SIMD chunks
-    for chunk in chunks {
-        let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+    for block in data.chunks(BLOCK_SIZE) {
+        let chunks = block.chunks_exact(LOGICAL_LANES);
+        let remainder = chunks.remainder();
 
-        // Unroll the loop for better performance
-        let array = simd_vec.as_array();
-        for &byte in array {
-            // SAFETY: byte is u8, so always valid index for [u32; 256]
+        // SIMD processing with unrolled inner loop
+        for chunk in chunks {
+            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+            let bytes = simd_vec.as_array();
+
+            // Unroll for better performance (adjust count for your LOGICAL_LANES)
+            for i in (0..LOGICAL_LANES).step_by(4) {
+                // Process 4 bytes at once to reduce loop overhead
+                if i + 3 < LOGICAL_LANES {
+                    histogram[bytes[i] as usize] += 1;
+                    histogram[bytes[i + 1] as usize] += 1;
+                    histogram[bytes[i + 2] as usize] += 1;
+                    histogram[bytes[i + 3] as usize] += 1;
+                } else {
+                    // Handle remaining bytes in the SIMD vector
+                    for j in i..LOGICAL_LANES {
+                        histogram[bytes[j] as usize] += 1;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Process remainder bytes
+        for &byte in remainder {
+            histogram[byte as usize] += 1;
+        }
+    }
+}
+
+// Alternative: Even more optimized version using unsafe for maximum speed
+pub fn simd_histogram_unsafe(data: &[u8], histogram: &mut [u32; 256]) {
+    const BLOCK_SIZE: usize = 8192;
+
+    for block in data.chunks(BLOCK_SIZE) {
+        let chunks = block.chunks_exact(LOGICAL_LANES);
+        let remainder = chunks.remainder();
+
+        for chunk in chunks {
+            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+            let bytes = simd_vec.as_array();
+
+            // SAFETY: bytes are u8, so always valid indices for 256-element array
+            for &byte in bytes {
+                unsafe {
+                    *histogram.get_unchecked_mut(byte as usize) += 1;
+                }
+            }
+        }
+
+        for &byte in remainder {
             unsafe {
                 *histogram.get_unchecked_mut(byte as usize) += 1;
             }
         }
     }
-
-    // Process remainder
-    for &byte in remainder {
-        histogram[byte as usize] += 1;
-    }
 }
 
-// Alternative: More aggressive SIMD optimization
-pub fn simd_histogram_optimized(data: &[u8], histogram: &mut [u32; 256]) {
-    // Process in larger chunks for better cache efficiency
-    const CHUNK_SIZE: usize = 8192;
+// Vectorized approach: Process multiple histograms in parallel if needed
+pub fn simd_histogram_parallel(data: &[u8], histograms: &mut [[u32; 256]]) {
+    let num_hists = histograms.len();
+    let chunk_size = data.len() / num_hists;
 
-    for chunk in data.chunks(CHUNK_SIZE) {
-        let simd_chunks = chunk.chunks_exact(LOGICAL_LANES);
-        let remainder = simd_chunks.remainder();
+    histograms
+        .par_iter_mut() // Requires rayon crate
+        .enumerate()
+        .for_each(|(i, histogram)| {
+            let start = i * chunk_size;
+            let end = if i == num_hists - 1 {
+                data.len()
+            } else {
+                start + chunk_size
+            };
+            let chunk = &data[start..end];
 
-        // SIMD processing
-        for simd_chunk in simd_chunks {
-            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(simd_chunk);
-            let array = simd_vec.as_array();
+            simd_histogram_single(chunk, histogram);
+        });
+}
 
-            // Manual unroll for 32 lanes (adjust for your SIMD_LANES)
-            histogram[array[0] as usize] += 1;
-            histogram[array[1] as usize] += 1;
-            histogram[array[2] as usize] += 1;
-            histogram[array[3] as usize] += 1;
-            // ... continue for all lanes or use a loop
-            for i in 0..LOGICAL_LANES {
-                histogram[array[i] as usize] += 1;
-            }
+// For comparison: highly optimized scalar version
+pub fn scalar_histogram_optimized(data: &[u8], histogram: &mut [u32; 256]) {
+    // Process in blocks for better cache performance
+    const BLOCK_SIZE: usize = 4096;
+
+    for block in data.chunks(BLOCK_SIZE) {
+        // Unroll by 8 for better ILP (Instruction Level Parallelism)
+        let chunks = block.chunks_exact(8);
+        let remainder = chunks.remainder();
+
+        for chunk in chunks {
+            // Manual unroll
+            histogram[chunk[0] as usize] += 1;
+            histogram[chunk[1] as usize] += 1;
+            histogram[chunk[2] as usize] += 1;
+            histogram[chunk[3] as usize] += 1;
+            histogram[chunk[4] as usize] += 1;
+            histogram[chunk[5] as usize] += 1;
+            histogram[chunk[6] as usize] += 1;
+            histogram[chunk[7] as usize] += 1;
         }
 
-        // Process remainder
         for &byte in remainder {
             histogram[byte as usize] += 1;
         }

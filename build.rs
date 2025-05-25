@@ -58,9 +58,7 @@ fn main() {
         // Write back only if changed
         if new_content != content {
             fs::write(&lib_path, new_content).expect("Failed to update lib.rs");
-            println!(
-                "cargo:warning=Updated LOGICAL_LANES to {logical_lanes} for target: {target}"
-            );
+            println!("cargo:warning=Updated LOGICAL_LANES to {logical_lanes} for target: {target}");
         }
     }
 
