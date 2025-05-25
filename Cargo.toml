@@ -6,13 +6,16 @@ authors = ["jer <alphastrata@gmail.com>"]
 
 [dependencies]
 rand = "0.9.1"
-
+image = "0.24"
 
 [[bin]]
 name = "minmax"
 path = "bins/minmax.rs"
 
-
 [[bin]]
 name = "string-pattern"
 path = "bins/stringpattern.rs"
+
+[[bin]]
+name = "greyscale"
+path = "bins/greyscale.rs"
