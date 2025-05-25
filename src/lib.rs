@@ -244,3 +244,41 @@ pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
 
     output
 }
+
+pub fn simd_histogram_single(data: &[u8], histogram: &mut [u32; 256]) {
+    // Process data in SIMD chunks
+    for chunk in data.chunks_exact(LOGICAL_LANES) {
+        let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+
+        // Update histogram for each byte in the SIMD vector
+        simd_vec.as_array().iter().for_each(|&byte| {
+            histogram[byte as usize] += 1;
+        });
+    }
+
+    // Process remainder
+    let remainder = data.chunks_exact(LOGICAL_LANES).remainder();
+    remainder.iter().for_each(|&byte| {
+        histogram[byte as usize] += 1;
+    });
+}
+
+// Or fix your existing multi-histogram function:
+pub fn simd_histogram(data: &[u8], histograms: &mut [&mut [u32; 256]]) {
+    for histogram in histograms.iter_mut() {
+        // Process full chunks with SIMD
+        for chunk in data.chunks_exact(LOGICAL_LANES) {
+            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+
+            simd_vec.as_array().iter().for_each(|&byte| {
+                histogram[byte as usize] += 1;
+            });
+        }
+
+        // Process remainder
+        let remainder = data.chunks_exact(LOGICAL_LANES).remainder();
+        remainder.iter().for_each(|&byte| {
+            histogram[byte as usize] += 1;
+        });
+    }
+}

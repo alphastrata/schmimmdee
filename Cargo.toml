@@ -17,5 +17,10 @@ name = "string-pattern"
 path = "bins/stringpattern.rs"
 
 [[bin]]
+name = "histogram"
+path = "bins/histogram.rs"
+
+
+[[bin]]
 name = "greyscale"
 path = "bins/greyscale.rs"
