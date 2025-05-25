@@ -24,6 +24,16 @@ pub fn format_ns(ns: f64) -> String {
     }
 }
 
+pub fn format_number(n: usize) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
+}
+
 // minmax
 
 #[unsafe(no_mangle)] // so if you want to peek @ the assembly it's easier to find your function..
@@ -246,39 +256,57 @@ pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
 }
 
 pub fn simd_histogram_single(data: &[u8], histogram: &mut [u32; 256]) {
-    // Process data in SIMD chunks
-    for chunk in data.chunks_exact(LOGICAL_LANES) {
+    let chunks = data.chunks_exact(LOGICAL_LANES);
+    let remainder = chunks.remainder();
+
+    // Process SIMD chunks
+    for chunk in chunks {
         let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
 
-        // Update histogram for each byte in the SIMD vector
-        simd_vec.as_array().iter().for_each(|&byte| {
-            histogram[byte as usize] += 1;
-        });
+        // Unroll the loop for better performance
+        let array = simd_vec.as_array();
+        for &byte in array {
+            // SAFETY: byte is u8, so always valid index for [u32; 256]
+            unsafe {
+                *histogram.get_unchecked_mut(byte as usize) += 1;
+            }
+        }
     }
 
     // Process remainder
-    let remainder = data.chunks_exact(LOGICAL_LANES).remainder();
-    remainder.iter().for_each(|&byte| {
+    for &byte in remainder {
         histogram[byte as usize] += 1;
-    });
+    }
 }
 
-// Or fix your existing multi-histogram function:
-pub fn simd_histogram(data: &[u8], histograms: &mut [&mut [u32; 256]]) {
-    for histogram in histograms.iter_mut() {
-        // Process full chunks with SIMD
-        for chunk in data.chunks_exact(LOGICAL_LANES) {
-            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+// Alternative: More aggressive SIMD optimization
+pub fn simd_histogram_optimized(data: &[u8], histogram: &mut [u32; 256]) {
+    // Process in larger chunks for better cache efficiency
+    const CHUNK_SIZE: usize = 8192;
 
-            simd_vec.as_array().iter().for_each(|&byte| {
-                histogram[byte as usize] += 1;
-            });
+    for chunk in data.chunks(CHUNK_SIZE) {
+        let simd_chunks = chunk.chunks_exact(LOGICAL_LANES);
+        let remainder = simd_chunks.remainder();
+
+        // SIMD processing
+        for simd_chunk in simd_chunks {
+            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(simd_chunk);
+            let array = simd_vec.as_array();
+
+            // Manual unroll for 32 lanes (adjust for your SIMD_LANES)
+            histogram[array[0] as usize] += 1;
+            histogram[array[1] as usize] += 1;
+            histogram[array[2] as usize] += 1;
+            histogram[array[3] as usize] += 1;
+            // ... continue for all lanes or use a loop
+            for i in 0..LOGICAL_LANES {
+                histogram[array[i] as usize] += 1;
+            }
         }
 
         // Process remainder
-        let remainder = data.chunks_exact(LOGICAL_LANES).remainder();
-        remainder.iter().for_each(|&byte| {
+        for &byte in remainder {
             histogram[byte as usize] += 1;
-        });
+        }
     }
 }

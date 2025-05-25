@@ -1,7 +1,5 @@
-// Fixed main.rs
-use std::{collections::HashMap, fs, path::Path, time::Instant};
-
-use schmimmdee::simd_histogram;
+use schmimmdee::{format_ns, format_number, simd_histogram_single};
+use std::{collections::HashMap, fs, hint::black_box, path::Path, time::Instant};
 
 fn main() {
     let data_path = "datasets/enwiki-latest-all-titles-in-ns0";
@@ -35,27 +33,91 @@ fn main() {
 
     // Step 2: Prepare data for histograms
     let all_chars: Vec<u8> = processed_data.bytes().collect();
-    let mut simd_hist = [0u32; 256]; // Make it mutable
-    let mut std_hist = [0u32; 256];
 
-    // Step 3: Benchmark implementations
-    println!("\nBenchmarking histogram implementations...");
+    // Test different data sizes
+    let sizes = [
+        1_000,
+        10_000,
+        100_000,
+        1_000_000,
+        if all_chars.len() > 10_000_000 {
+            10_000_000
+        } else {
+            all_chars.len()
+        },
+        all_chars.len(),
+    ];
+    let trials = 10;
 
-    // Benchmark SIMD version - pass a mutable reference to the array directly
-    let simd_start = Instant::now();
-    simd_histogram(&all_chars, &mut [&mut simd_hist]); // Pass slice of mutable references
-    let simd_duration = simd_start.elapsed();
-    println!("SIMD histogram: {:?}", simd_duration);
+    println!("\n{:-^80}", " Histogram Benchmark Results ");
+    println!(
+        "| {:>12} | {:>15} | {:>15} | {:>10} | {:>10} |",
+        "Elements", "Standard", "SIMD", "Speedup", "Valid"
+    );
+    println!(
+        "|{:-^14}|{:-^17}|{:-^17}|{:-^12}|{:-^12}|",
+        "", "", "", "", ""
+    );
 
-    // Benchmark standard version
-    let std_start = Instant::now();
-    standard_histogram(&all_chars, &mut std_hist);
-    let std_duration = std_start.elapsed();
-    println!("Standard histogram: {:?}", std_duration);
+    for &size in &sizes {
+        if size == 0 {
+            continue;
+        }
 
-    // Verify results match
-    assert_eq!(simd_hist, std_hist, "Histogram results differ!");
-    println!("Results verified identical");
+        let data_slice = &all_chars[..size.min(all_chars.len())];
+
+        // Warmup to prevent cache effects
+        for _ in 0..3 {
+            let mut warmup_hist1 = [0u32; 256];
+            let mut warmup_hist2 = [0u32; 256];
+            black_box(standard_histogram(data_slice, &mut warmup_hist1));
+            black_box(simd_histogram_single(data_slice, &mut warmup_hist2));
+        }
+
+        // Benchmark standard version
+        let standard_time: u128 = (0..trials)
+            .map(|_| {
+                let mut hist = [0u32; 256];
+                let start = Instant::now();
+                black_box(standard_histogram(data_slice, &mut hist));
+                start.elapsed().as_nanos()
+            })
+            .sum();
+
+        // Benchmark SIMD version
+        let simd_time: u128 = (0..trials)
+            .map(|_| {
+                let mut hist = [0u32; 256];
+                let start = Instant::now();
+                black_box(simd_histogram_single(data_slice, &mut hist));
+                start.elapsed().as_nanos()
+            })
+            .sum();
+
+        // Calculate averages and speedup
+        let avg_standard = standard_time as f64 / trials as f64;
+        let avg_simd = simd_time as f64 / trials as f64;
+        let speedup = avg_standard / avg_simd;
+
+        // Verify results match
+        let mut std_hist = [0u32; 256];
+        let mut simd_hist = [0u32; 256];
+        standard_histogram(data_slice, &mut std_hist);
+        simd_histogram_single(data_slice, &mut simd_hist);
+        let valid = std_hist == simd_hist;
+
+        // Print formatted results
+        println!(
+            "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
+            format_number(size),
+            format_ns(avg_standard),
+            format_ns(avg_simd),
+            speedup,
+            if valid { "✓" } else { "✗" }
+        );
+    }
+
+    println!("{:-^80}", "");
 }
 
 fn create_word_counts(text: &str) -> HashMap<String, u32> {
@@ -68,5 +130,7 @@ fn create_word_counts(text: &str) -> HashMap<String, u32> {
 }
 
 fn standard_histogram(data: &[u8], histogram: &mut [u32; 256]) {
-    data.iter().for_each(|&byte| histogram[byte as usize] += 1);
+    for &byte in data {
+        histogram[byte as usize] += 1;
+    }
 }
