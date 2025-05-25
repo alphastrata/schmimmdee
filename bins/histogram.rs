@@ -1,7 +1,4 @@
-use schmimmdee::{
-    format_ns, format_number, simd_histogram_parallel,
-    simd_histogram_single,
-};
+use schmimmdee::{format_ns, format_number, simd_histogram_parallel, simd_histogram_single};
 use std::{collections::HashMap, fs, hint::black_box, path::Path, time::Instant};
 
 fn main() {
@@ -93,9 +90,15 @@ fn main() {
         // Benchmark SIMD version
         let simd_time: u128 = (0..trials)
             .map(|_| {
+                #[allow(unused_mut)]
                 let mut hist = [0u32; 256];
                 let start = Instant::now();
+                // NOTE: these are actually ALL universally worse (on all my machines).
+
                 simd_histogram_single(data_slice, &mut hist);
+                // schmimmdee::simd_histogram_unsafe(data_slice, &mut hist);
+                // simd_histogram_parallel(data_slice, &mut [hist]);
+
                 black_box(());
                 start.elapsed().as_nanos()
             })
@@ -108,11 +111,11 @@ fn main() {
 
         // Verify results match
         let mut std_hist = [0u32; 256];
-        let simd_hist = [0u32; 256];
+        let mut simd_hist = [0u32; 256];
         standard_histogram(data_slice, &mut std_hist);
-        // simd_histogram_unsafe(data_slice, &mut simd_hist); // WORSE!
-        simd_histogram_parallel(data_slice, &mut [simd_hist]);
+        simd_histogram_single(data_slice, &mut simd_hist);
         let valid = std_hist == simd_hist;
+        assert!(valid);
 
         // Print formatted results
         println!(
