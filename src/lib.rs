@@ -11,7 +11,10 @@ use std::{
 use rayon::iter::IndexedParallelIterator;
 use rayon::prelude::*;
 
-/// Update this to reflect the width of YOUR system's registers.
+/// NOTE: the build.rs will set this for you assuming FLOATS
+/// so LOGICAL_LANES, for example might be 4, meaning 4 * f32 = 128
+/// if you have AVX12 registers that go up to 512bits you might see 16 * f32 = 512
+/// ... and so on.
 const LOGICAL_LANES: usize = 4; // Auto-detected for x86_64-pc-windows-msvc
 
 /// prettly-formant nanos from our std::instant timing.
@@ -75,6 +78,7 @@ pub fn find_min_max_scalar(data: &[f32]) -> (f32, f32) {
 
 // patterns in strings
 pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
+    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
     if needle.is_empty() {
         return true;
     }
@@ -87,17 +91,17 @@ pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
 
     // Use SIMD to quickly find first character candidates
     let first_char = needle[0];
-    let first_char_vec = Simd::<u8, LOGICAL_LANES>::splat(first_char);
+    let first_char_vec = Simd::<u8, LANES>::splat(first_char);
 
     let mut i = 0;
-    while i + LOGICAL_LANES <= haystack.len() {
-        let chunk = Simd::<u8, LOGICAL_LANES>::from_slice(&haystack[i..i + LOGICAL_LANES]);
+    while i + LANES <= haystack.len() {
+        let chunk = Simd::<u8, LANES>::from_slice(&haystack[i..i + LANES]);
         let mask = chunk.simd_eq(first_char_vec);
 
         if mask.any() {
             // Check each potential match position
             let mask_array = mask.to_array();
-            for j in 0..LOGICAL_LANES {
+            for j in 0..LANES {
                 if mask_array[j]
                     && i + j + needle.len() <= haystack.len()
                     && &haystack[i + j..i + j + needle.len()] == needle
@@ -106,7 +110,7 @@ pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
                 }
             }
         }
-        i += LOGICAL_LANES;
+        i += LANES;
     }
 
     // Handle remaining bytes
@@ -120,15 +124,17 @@ pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 fn simd_contains_byte(haystack: &[u8], target: u8) -> bool {
-    let target_vec = Simd::<u8, LOGICAL_LANES>::splat(target);
+    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+
+    let target_vec = Simd::<u8, LANES>::splat(target);
 
     let mut i = 0;
-    while i + LOGICAL_LANES <= haystack.len() {
-        let chunk = Simd::<u8, LOGICAL_LANES>::from_slice(&haystack[i..i + LOGICAL_LANES]);
+    while i + LANES <= haystack.len() {
+        let chunk = Simd::<u8, LANES>::from_slice(&haystack[i..i + LANES]);
         if chunk.simd_eq(target_vec).any() {
             return true;
         }
-        i += LOGICAL_LANES;
+        i += LANES;
     }
 
     // Check remaining bytes without SIMD because, the setup is not worth it for small inputs
@@ -136,6 +142,8 @@ fn simd_contains_byte(haystack: &[u8], target: u8) -> bool {
 }
 
 pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
+    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+
     if needle.is_empty() {
         return Some(0);
     }
@@ -153,17 +161,17 @@ pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
 
     // Use SIMD to quickly find first character candidates
     let first_char = needle_bytes[0];
-    let first_char_vec = Simd::<u8, LOGICAL_LANES>::splat(first_char);
+    let first_char_vec = Simd::<u8, LANES>::splat(first_char);
 
     let mut i = 0;
-    while i + LOGICAL_LANES <= haystack_bytes.len() {
-        let chunk = Simd::<u8, LOGICAL_LANES>::from_slice(&haystack_bytes[i..i + LOGICAL_LANES]);
+    while i + LANES <= haystack_bytes.len() {
+        let chunk = Simd::<u8, LANES>::from_slice(&haystack_bytes[i..i + LANES]);
         let mask = chunk.simd_eq(first_char_vec);
 
         if mask.any() {
             // Check each potential match position
             let mask_array = mask.to_array();
-            for j in 0..LOGICAL_LANES {
+            for j in 0..LANES {
                 if mask_array[j]
                     && i + j + needle_bytes.len() <= haystack_bytes.len()
                     && &haystack_bytes[i + j..i + j + needle_bytes.len()] == needle_bytes
@@ -172,7 +180,7 @@ pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
                 }
             }
         }
-        i += LOGICAL_LANES;
+        i += LANES;
     }
 
     // Handle remaining bytes
@@ -185,22 +193,24 @@ pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
 }
 
 fn simd_find_byte(haystack: &[u8], target: u8) -> Option<usize> {
-    let target_vec = Simd::<u8, LOGICAL_LANES>::splat(target);
+    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+
+    let target_vec = Simd::<u8, LANES>::splat(target);
 
     let mut i = 0;
-    while i + LOGICAL_LANES <= haystack.len() {
-        let chunk = Simd::<u8, LOGICAL_LANES>::from_slice(&haystack[i..i + LOGICAL_LANES]);
+    while i + LANES <= haystack.len() {
+        let chunk = Simd::<u8, LANES>::from_slice(&haystack[i..i + LANES]);
         let mask = chunk.simd_eq(target_vec);
 
         if mask.any() {
             let mask_array = mask.to_array();
-            for j in 0..LOGICAL_LANES {
+            for j in 0..LANES {
                 if mask_array[j] {
                     return Some(i + j);
                 }
             }
         }
-        i += LOGICAL_LANES;
+        i += LANES;
     }
 
     // Check remaining
@@ -214,7 +224,7 @@ fn simd_find_byte(haystack: &[u8], target: u8) -> Option<usize> {
 
 /// Convert RGBA (`[u8;4]`) to grayscale (`[u8;3]`) using SIMD.
 pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
-    const LANES: usize = LOGICAL_LANES * 4; // Process 16 pixels at once (AVX2-friendly)
+    const LANES: usize = LOGICAL_LANES * 4;
     let mut output = Vec::with_capacity(rgba.len());
 
     // Weights scaled to fixed-point precision (0.2126 ≈ 54/255, etc.)
