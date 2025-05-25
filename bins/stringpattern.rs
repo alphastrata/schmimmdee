@@ -9,7 +9,7 @@ fn main() {
 
     // Check if the data file exists
     if !Path::new(data_path).exists() {
-        eprintln!("Error: Data file not found at {}", data_path);
+        eprintln!("Error: Data file not found at {data_path}");
         eprintln!("Please download it from:");
         eprintln!("https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz");
         eprintln!("Extract it and place it in the datasets/ directory.");
@@ -21,7 +21,7 @@ fn main() {
     let raw_data = match fs::read_to_string(data_path) {
         Ok(data) => data,
         Err(e) => {
-            eprintln!("Error reading file: {}", e);
+            eprintln!("Error reading file: {e}");
             std::process::exit(1);
         }
     };
@@ -97,8 +97,7 @@ fn main() {
         // Assert that results are exactly the same
         assert_eq!(
             std_contains_result, simd_contains_result,
-            "Contains results don't match for term '{}': std={}, simd={}",
-            term, std_contains_result, simd_contains_result
+            "Contains results don't match for term '{term}': std={std_contains_result}, simd={simd_contains_result}"
         );
 
         let contains_valid = std_contains_result == simd_contains_result;
@@ -132,8 +131,7 @@ fn main() {
         // Assert that results are exactly the same
         assert_eq!(
             std_find_result, simd_find_result,
-            "Find results don't match for term '{}': std={:?}, simd={:?}",
-            term, std_find_result, simd_find_result
+            "Find results don't match for term '{term}': std={std_find_result:?}, simd={simd_find_result:?}"
         );
 
         let find_valid = std_find_result == simd_find_result;

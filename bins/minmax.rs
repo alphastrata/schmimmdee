@@ -29,7 +29,7 @@ fn main() {
             black_box({
                 _ = find_min_max_scalar(&data);
                 _ = find_min_max_simd(&data);
-            })
+            });
         });
 
         // Benchmark scalar version

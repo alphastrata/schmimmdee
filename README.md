@@ -85,7 +85,7 @@ cat target/release/deps/schmimmdee-cd6afcb096a75bb5.s
 ```
 - the hash will be different for every build.
 
-- the linetables are inlcuded so you can match lines of code i.e:
+- the linetables are included so you can match lines of code i.e:
 ```rust
     min_vec = min_vec.simd_min(values);
 ```

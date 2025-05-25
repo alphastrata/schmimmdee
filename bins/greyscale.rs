@@ -1,33 +1,42 @@
-use image::{DynamicImage, Rgba, imageops::grayscale, io::Reader as ImageReader};
-use std::simd::{Simd, SimdFloat, SimdPartialOrd, StdFloat};
+use image::{DynamicImage, ImageBuffer, Rgb};
+use schmimmdee::rgba_to_gray_simd_u8;
 
-fn image_to_rgba_vec(img: &DynamicImage) -> Vec<[f32; 4]> {
-    // Convert to RGBA8 if not already in that format
-    let rgba_img = img.to_rgba8();
-    let pixels = rgba_img.pixels();
+/// Extract RGBA pixels as `Vec<[u8; 4]>` from a `DynamicImage`.
+pub fn image_to_rgba_u8(img: &DynamicImage) -> Vec<[u8; 4]> {
+    let rgba = img.to_rgba8();
+    rgba.pixels().map(|p| [p[0], p[1], p[2], p[3]]).collect()
+}
 
-    // Map each Rgba<u8> pixel to [f32; 4] (normalized to 0.0..=1.0)
-    pixels
-        .map(|Rgba([r, g, b, a])| {
-            [
-                *r as f32 / 255.0,
-                *g as f32 / 255.0,
-                *b as f32 / 255.0,
-                *a as f32 / 255.0,
-            ]
-        })
-        .collect()
+pub fn vec_to_dynamic_u8(pixels: Vec<[u8; 3]>, width: u32, height: u32) -> DynamicImage {
+    let raw_data: Vec<u8> = pixels.into_iter().flat_map(|[r, g, b]| [r, g, b]).collect();
+    let buffer = ImageBuffer::<Rgb<u8>, _>::from_raw(width, height, raw_data)
+        .expect("Invalid buffer dimensions");
+    DynamicImage::ImageRgb8(buffer)
 }
 
 fn main() -> Result<(), image::ImageError> {
-    // Open the image from the assets folder
-    let img = ImageReader::open("./assets/test.png")?.decode()?;
+    // Load image
+    let img = image::io::Reader::open("./assets/lenna.png")?.decode()?;
+    let (width, height) = (img.width(), img.height());
 
-    // Convert the image to grayscale
-    let gray_img = grayscale(&img);
+    // Convert to RGBA u8
+    let rgba_u8 = image_to_rgba_u8(&img);
 
-    // Save the grayscale image (optional)
-    gray_img.save("./assets/test_gray.png")?;
+    // Benchmark SIMD version
+    let start_simd = std::time::Instant::now();
+    let simd_gray = rgba_to_gray_simd_u8(&rgba_u8);
+    let simd_time = start_simd.elapsed();
+
+    // Benchmark baseline (image crate's grayscale)
+    let start_baseline = std::time::Instant::now();
+    let baseline_gray = img.grayscale();
+    let baseline_time = start_baseline.elapsed();
+
+    println!("SIMD: {simd_time:?}, Baseline: {baseline_time:?}");
+
+    // Save results
+    vec_to_dynamic_u8(simd_gray, width, height).save("lena_simd_gray.png")?;
+    baseline_gray.save("lena_baseline_gray.png")?;
 
     Ok(())
 }

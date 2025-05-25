@@ -46,8 +46,7 @@ fn main() {
                     .starts_with("const LOGICAL_LANES: usize =")
                 {
                     format!(
-                        "const LOGICAL_LANES: usize = {}; // Auto-detected for {}",
-                        logical_lanes, target
+                        "const LOGICAL_LANES: usize = {logical_lanes}; // Auto-detected for {target}"
                     )
                 } else {
                     line.to_string()
@@ -60,8 +59,7 @@ fn main() {
         if new_content != content {
             fs::write(&lib_path, new_content).expect("Failed to update lib.rs");
             println!(
-                "cargo:warning=Updated LOGICAL_LANES to {} for target: {}",
-                logical_lanes, target
+                "cargo:warning=Updated LOGICAL_LANES to {logical_lanes} for target: {target}"
             );
         }
     }

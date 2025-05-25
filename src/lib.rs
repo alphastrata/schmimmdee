@@ -1,13 +1,17 @@
 #![feature(portable_simd)]
 use std::{
     f32,
-    simd::{Simd, StdFloat, cmp::SimdPartialEq, num::SimdFloat},
+    simd::{
+        Simd,
+        cmp::SimdPartialEq,
+        num::{SimdFloat, SimdUint},
+    },
 };
 
 /// Update this to reflect the width of YOUR system's registers.
 const LOGICAL_LANES: usize = 4; // Auto-detected for x86_64-pc-windows-msvc
 
-/// prettly-formant nanos from our std::instant timming.
+/// prettly-formant nanos from our std::instant timing.
 pub fn format_ns(ns: f64) -> String {
     if ns >= 1_000_000_000.0 {
         format!("{:.2}s", ns / 1_000_000_000.0)
@@ -22,7 +26,7 @@ pub fn format_ns(ns: f64) -> String {
 
 // minmax
 
-#[unsafe(no_mangle)] // so if you want to peek @ the asembly it's easier to find your function..
+#[unsafe(no_mangle)] // so if you want to peek @ the assembly it's easier to find your function..
 pub fn find_min_max_simd(data: &[f32]) -> (f32, f32) {
     let mut min_vec = Simd::<f32, LOGICAL_LANES>::splat(f32::MAX);
     let mut max_vec = Simd::<f32, LOGICAL_LANES>::splat(f32::MIN);
@@ -36,13 +40,10 @@ pub fn find_min_max_simd(data: &[f32]) -> (f32, f32) {
     let mut min = min_vec.reduce_min();
     let mut max = max_vec.reduce_max();
 
-    data.chunks_exact(8)
-        .remainder()
-        .into_iter()
-        .for_each(|&value| {
-            min = min.min(value);
-            max = max.max(value);
-        });
+    data.chunks_exact(8).remainder().iter().for_each(|&value| {
+        min = min.min(value);
+        max = max.max(value);
+    });
 
     (min, max)
 }
@@ -51,7 +52,7 @@ pub fn find_min_max_scalar(data: &[f32]) -> (f32, f32) {
     let mut min = f32::MAX;
     let mut max = f32::MIN;
 
-    data.into_iter().for_each(|&value| {
+    data.iter().for_each(|&value| {
         min = min.min(value);
         max = max.max(value);
     });
@@ -84,10 +85,11 @@ pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
             // Check each potential match position
             let mask_array = mask.to_array();
             for j in 0..LOGICAL_LANES {
-                if mask_array[j] && i + j + needle.len() <= haystack.len() {
-                    if &haystack[i + j..i + j + needle.len()] == needle {
-                        return true;
-                    }
+                if mask_array[j]
+                    && i + j + needle.len() <= haystack.len()
+                    && &haystack[i + j..i + j + needle.len()] == needle
+                {
+                    return true;
                 }
             }
         }
@@ -96,10 +98,8 @@ pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
 
     // Handle remaining bytes
     for pos in i..=haystack.len() - needle.len() {
-        if haystack[pos] == first_char {
-            if &haystack[pos..pos + needle.len()] == needle {
-                return true;
-            }
+        if haystack[pos] == first_char && &haystack[pos..pos + needle.len()] == needle {
+            return true;
         }
     }
 
@@ -151,10 +151,11 @@ pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
             // Check each potential match position
             let mask_array = mask.to_array();
             for j in 0..LOGICAL_LANES {
-                if mask_array[j] && i + j + needle_bytes.len() <= haystack_bytes.len() {
-                    if &haystack_bytes[i + j..i + j + needle_bytes.len()] == needle_bytes {
-                        return Some(i + j);
-                    }
+                if mask_array[j]
+                    && i + j + needle_bytes.len() <= haystack_bytes.len()
+                    && &haystack_bytes[i + j..i + j + needle_bytes.len()] == needle_bytes
+                {
+                    return Some(i + j);
                 }
             }
         }
@@ -162,13 +163,10 @@ pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
     }
 
     // Handle remaining bytes
-    for pos in i..=haystack_bytes.len() - needle_bytes.len() {
-        if haystack_bytes[pos] == first_char {
-            if &haystack_bytes[pos..pos + needle_bytes.len()] == needle_bytes {
-                return Some(pos);
-            }
-        }
-    }
+    (i..=haystack_bytes.len() - needle_bytes.len()).find(|&pos| {
+        haystack_bytes[pos] == first_char
+            && &haystack_bytes[pos..pos + needle_bytes.len()] == needle_bytes
+    });
 
     None
 }
@@ -201,45 +199,46 @@ fn simd_find_byte(haystack: &[u8], target: u8) -> Option<usize> {
 
 // greyscale an img:
 
-/// Convert RGBA ([f32;4]) to grayscale ([f32;3]) using SIMD.
-/// Assumes input is normalized (0.0..=1.0).
-pub fn rgba_to_gray_simd(rgba: &[[f32; 4]]) -> Vec<[f32; 3]> {
-    // We'll process 8 pixels at a time (8x RGBA = 32 floats)
-    const LANES: usize = 8;
+/// Convert RGBA (`[u8;4]`) to grayscale (`[u8;3]`) using SIMD.
+pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
+    const LANES: usize = LOGICAL_LANES; // Process 16 pixels at once (AVX2-friendly)
     let mut output = Vec::with_capacity(rgba.len());
 
-    // Weights for R, G, B (alpha ignored)
-    let r_weight = Simd::<f32, LANES>::splat(0.2126);
-    let g_weight = Simd::<f32, LANES>::splat(0.7152);
-    let b_weight = Simd::<f32, LANES>::splat(0.0722);
+    // Weights scaled to fixed-point precision (0.2126 ≈ 54/255, etc.)
+    let r_weight = Simd::<u16, LANES>::splat(54); // 0.2126 * 255 ≈ 54
+    let g_weight = Simd::<u16, LANES>::splat(182); // 0.7152 * 255 ≈ 182
+    let b_weight = Simd::<u16, LANES>::splat(18); // 0.0722 * 255 ≈ 18
 
     for chunk in rgba.chunks_exact(LANES) {
-        // Transpose RGBA into separate R, G, B, A SIMD vectors
-        let (mut r, mut g, mut b, _) = ([0.0; LANES], [0.0; LANES], [0.0; LANES], [0.0; LANES]);
+        let (mut r, mut g, mut b) = ([0u8; LANES], [0u8; LANES], [0u8; LANES]);
 
+        // Extract R, G, B components (ignore alpha)
         for (i, &[ri, gi, bi, _]) in chunk.iter().enumerate() {
             r[i] = ri;
             g[i] = gi;
             b[i] = bi;
         }
 
-        let r_simd = Simd::from_array(r);
-        let g_simd = Simd::from_array(g);
-        let b_simd = Simd::from_array(b);
+        // Convert u8 -> u16 to avoid overflow during multiplication
+        let r_simd = Simd::from_array(r).cast::<u16>();
+        let g_simd = Simd::from_array(g).cast::<u16>();
+        let b_simd = Simd::from_array(b).cast::<u16>();
 
-        // Compute luminance: 0.2126*R + 0.7152*G + 0.0722*B
-        let gray = r_simd.mul_add(r_weight, g_simd.mul_add(g_weight, b_simd * b_weight));
+        // Compute luminance: (54*R + 182*G + 18*B) >> 8 (equivalent to /255)
+        let gray = (r_simd * r_weight + g_simd * g_weight + b_simd * b_weight) >> 8;
+        let gray_u8 = gray.cast::<u8>().to_array();
 
-        // Store as RGB (repeating luminance for all 3 channels)
-        let gray_array = gray.to_array();
-        for &l in gray_array.iter() {
-            output.push([l, l, l]); // RGB (no alpha)
+        // Store as RGB (repeating luminance)
+        for &l in gray_u8.iter() {
+            output.push([l, l, l]);
         }
     }
 
-    // Handle remaining pixels (if input isn't a multiple of LANES)
+    // Handle remaining pixels, although in the land of images, that come from cameras
+    // you're going to find powers of two (most of the time), so this code will likely do little (if anything)
+    // in most applications.
     for &[r, g, b, _] in rgba.chunks_exact(LANES).remainder() {
-        let l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let l = ((54 * r as u16 + 182 * g as u16 + 18 * b as u16) >> 8) as u8;
         output.push([l, l, l]);
     }
 
