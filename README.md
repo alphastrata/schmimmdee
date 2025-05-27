@@ -26,7 +26,7 @@ Compare SIMD and Scalar min/max finding functions on increasingly larger arrays 
 
 <br>
 
-> Ryzen 5950x
+> CPU: AMD Ryzen 9 5950X (32) @ 5.084GHz
 
 |     Elements |          Scalar |            SIMD |    Speedup |
 |--------------|-----------------|-----------------|------------|
@@ -45,12 +45,15 @@ Compare SIMD and Scalar min/max finding functions on increasingly larger arrays 
 
 
 # searching-pattern
+
+Usage: `cargo run -r --bin string-pattern`
+
 Uses this dataset: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
 (A list of the `titles` of all wikipedia articles).
 
 <details><summary>Results:</summary>
 
-
+> CPU: AMD Ryzen 9 5950X (32) @ 5.084GHz
 > 'Path of Exile 2'  
 
 |       Method |         Std Lib |            SIMD |    Speedup |      Valid |
@@ -71,7 +74,43 @@ Uses this dataset: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-t
 
 </details>
 
+# histogram
 
+Usage: `cargo run -r --bin histogram`
+
+> this one isn't great.
+
+Uses this dataset: https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
+(A list of the `titles` of all wikipedia articles).
+
+> CPU: AMD Ryzen 7 7840U
+<details><summary>Results:</summary>
+
+|     Elements |        Standard |            SIMD |    Speedup |      Valid |
+|--------------|-----------------|-----------------|------------|------------|
+|         1.0K |        398.90ns |        369.60ns |      1.08x |         ✓ |
+|        10.0K |          3.22μs |          3.08μs |      1.05x |         ✓ |
+|       100.0K |         32.53μs |         30.72μs |      1.06x |         ✓ |
+|         1.0M |        345.88μs |        321.89μs |      1.07x |         ✓ |
+|        10.0M |          3.19ms |          3.01ms |      1.06x |         ✓ |
+|       404.2M |        128.03ms |        121.82ms |      1.05x |         ✓ |
+</details>
+
+# greyscale
+> this one is my fav of all of the impls here
+
+Usage: `cargo run -r --bin greyscale`
+
+> CPU: AMD Ryzen 7 7840U
+<details><summary>Results:</summary>
+
+```txt
+SIMD: 561.793µs, Baseline: 838.792µs
+SIMD: 904.686µs, Baseline: 2.088766ms
+```
+
+Not bad!
+</details>
 
 
 
@@ -129,3 +168,5 @@ Ltmp47:
 	movaps	xmm7, xmm5
 	movaps	xmm6, xmm5
 ```
+
+For the uninitiated `xmm0` and the `xmm` like registers are from `sse`, `ymm` from `avx` and `avx2` and `zmm` would be from `avx512`.
