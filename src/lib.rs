@@ -15,7 +15,7 @@ use rayon::prelude::*;
 /// so LOGICAL_LANES, for example might be 4, meaning 4 * f32 = 128
 /// if you have AVX12 registers that go up to 512bits you might see 16 * f32 = 512
 /// ... and so on.
-const LOGICAL_LANES: usize = 4; // Auto-detected for x86_64-pc-windows-msvc
+const LOGICAL_LANES_: usize = 4; // Auto-detected for x86_64-unknown-linux-gnu
 
 /// prettly-formant nanos from our std::instant timing.
 pub fn format_ns(ns: f64) -> String {
@@ -44,11 +44,11 @@ pub fn format_number(n: usize) -> String {
 
 #[unsafe(no_mangle)] // so if you want to peek @ the assembly it's easier to find your function..
 pub fn find_min_max_simd(data: &[f32]) -> (f32, f32) {
-    let mut min_vec = Simd::<f32, LOGICAL_LANES>::splat(f32::MAX);
-    let mut max_vec = Simd::<f32, LOGICAL_LANES>::splat(f32::MIN);
+    let mut min_vec = Simd::<f32, LOGICAL_LANES_>::splat(f32::MAX);
+    let mut max_vec = Simd::<f32, LOGICAL_LANES_>::splat(f32::MIN);
 
-    data.chunks_exact(LOGICAL_LANES).for_each(|chunk| {
-        let values = Simd::<f32, LOGICAL_LANES>::from_slice(chunk);
+    data.chunks_exact(LOGICAL_LANES_).for_each(|chunk| {
+        let values = Simd::<f32, LOGICAL_LANES_>::from_slice(chunk);
         min_vec = min_vec.simd_min(values);
         max_vec = max_vec.simd_max(values);
     });
@@ -78,7 +78,7 @@ pub fn find_min_max_scalar(data: &[f32]) -> (f32, f32) {
 
 // patterns in strings
 pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
-    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+    const LANES: usize = LOGICAL_LANES_ * 4; // (there's 4 u8s of bits in an f32)
     if needle.is_empty() {
         return true;
     }
@@ -124,7 +124,7 @@ pub fn simd_contains_pattern(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 fn simd_contains_byte(haystack: &[u8], target: u8) -> bool {
-    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+    const LANES: usize = LOGICAL_LANES_ * 4; // (there's 4 u8s of bits in an f32)
 
     let target_vec = Simd::<u8, LANES>::splat(target);
 
@@ -142,7 +142,7 @@ fn simd_contains_byte(haystack: &[u8], target: u8) -> bool {
 }
 
 pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
-    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+    const LANES: usize = LOGICAL_LANES_ * 4; // (there's 4 u8s of bits in an f32)
 
     if needle.is_empty() {
         return Some(0);
@@ -193,7 +193,7 @@ pub fn simd_find_str(haystack: &str, needle: &str) -> Option<usize> {
 }
 
 fn simd_find_byte(haystack: &[u8], target: u8) -> Option<usize> {
-    const LANES: usize = LOGICAL_LANES * 4; // (there's 4 u8s of bits in an f32)
+    const LANES: usize = LOGICAL_LANES_ * 4; // (there's 4 u8s of bits in an f32)
 
     let target_vec = Simd::<u8, LANES>::splat(target);
 
@@ -224,7 +224,7 @@ fn simd_find_byte(haystack: &[u8], target: u8) -> Option<usize> {
 
 /// Convert RGBA (`[u8;4]`) to grayscale (`[u8;3]`) using SIMD.
 pub fn rgba_to_gray_simd_u8(rgba: &[[u8; 4]]) -> Vec<[u8; 3]> {
-    const LANES: usize = LOGICAL_LANES * 4;
+    const LANES: usize = LOGICAL_LANES_ * 4;
     let mut output = Vec::with_capacity(rgba.len());
 
     // Weights scaled to fixed-point precision (0.2126 ≈ 54/255, etc.)
@@ -273,25 +273,25 @@ pub fn simd_histogram_single(data: &[u8], histogram: &mut [u32; 256]) {
     const BLOCK_SIZE: usize = 4096;
 
     for block in data.chunks(BLOCK_SIZE) {
-        let chunks = block.chunks_exact(LOGICAL_LANES);
+        let chunks = block.chunks_exact(LOGICAL_LANES_);
         let remainder = chunks.remainder();
 
         // SIMD processing with unrolled inner loop
         for chunk in chunks {
-            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+            let simd_vec = Simd::<u8, LOGICAL_LANES_>::from_slice(chunk);
             let bytes = simd_vec.as_array();
 
             // Unroll for better performance (adjust count for your LOGICAL_LANES)
-            for i in (0..LOGICAL_LANES).step_by(4) {
+            for i in (0..LOGICAL_LANES_).step_by(4) {
                 // Process 4 bytes at once to reduce loop overhead
-                if i + 3 < LOGICAL_LANES {
+                if i + 3 < LOGICAL_LANES_ {
                     histogram[bytes[i] as usize] += 1;
                     histogram[bytes[i + 1] as usize] += 1;
                     histogram[bytes[i + 2] as usize] += 1;
                     histogram[bytes[i + 3] as usize] += 1;
                 } else {
                     // Handle remaining bytes in the SIMD vector
-                    for j in i..LOGICAL_LANES {
+                    for j in i..LOGICAL_LANES_ {
                         histogram[bytes[j] as usize] += 1;
                     }
                     break;
@@ -311,11 +311,11 @@ pub fn simd_histogram_unsafe(data: &[u8], histogram: &mut [u32; 256]) {
     const BLOCK_SIZE: usize = 8192;
 
     for block in data.chunks(BLOCK_SIZE) {
-        let chunks = block.chunks_exact(LOGICAL_LANES);
+        let chunks = block.chunks_exact(LOGICAL_LANES_);
         let remainder = chunks.remainder();
 
         for chunk in chunks {
-            let simd_vec = Simd::<u8, LOGICAL_LANES>::from_slice(chunk);
+            let simd_vec = Simd::<u8, LOGICAL_LANES_>::from_slice(chunk);
             let bytes = simd_vec.as_array();
 
             // SAFETY: bytes are u8, so always valid indices for 256-element array

@@ -1,4 +1,3 @@
-// build.rs
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -10,23 +9,23 @@ fn main() {
     // Determine optimal SIMD width based on target architecture and features
     let logical_lanes = if target.contains("x86_64") || target.contains("i686") {
         if target_features.contains("avx512f") {
-            16 // AVX-512: 512 bits / 32 bits per f32 = 16 lanes
+            8 // AVX-512: 512 bits / 64 bits per u64 = 8 lanes
         } else if target_features.contains("avx2") || target_features.contains("avx") {
-            8 // AVX/AVX2: 256 bits / 32 bits per f32 = 8 lanes
+            4 // AVX/AVX2: 256 bits / 64 bits per u64 = 4 lanes
         } else if target_features.contains("sse2") {
-            4 // SSE2: 128 bits / 32 bits per f32 = 4 lanes
+            2 // SSE2: 128 bits / 64 bits per u64 = 2 lanes
         } else {
             1 // Fallback to scalar
         }
     } else if target.contains("aarch64") {
         if target_features.contains("neon") {
-            4 // ARM NEON: 128 bits / 32 bits per f32 = 4 lanes
+            2 // ARM NEON: 128 bits / 64 bits per u64 = 2 lanes
         } else {
             1 // Fallback to scalar
         }
     } else if target.contains("wasm32") {
         if target_features.contains("simd128") {
-            4 // WebAssembly SIMD: 128 bits / 32 bits per f32 = 4 lanes
+            2 // WebAssembly SIMD: 128 bits / 64 bits per u64 = 2 lanes
         } else {
             1 // Fallback to scalar
         }

@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use schmimmdee::{format_ns, format_number, simd_histogram_parallel, simd_histogram_single};
 use std::{collections::HashMap, fs, hint::black_box, path::Path, time::Instant};
 
