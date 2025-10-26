@@ -1,11 +1,11 @@
 [package]
 name = "schmimmdee"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["jer <alphastrata@gmail.com>"]
 
 [dependencies]
-rand = "0.9.1"
+rand = "0.8.5"
 image = "0.24"
 rayon = "1.10.0"
 
@@ -14,14 +14,73 @@ name = "minmax"
 path = "bins/minmax.rs"
 
 [[bin]]
-name = "string-pattern"
+name = "greyscale"
+path = "bins/greyscale.rs"
+
+[[bin]]
+name = "stringpattern"
 path = "bins/stringpattern.rs"
 
 [[bin]]
 name = "histogram"
 path = "bins/histogram.rs"
 
+[[bin]]
+name = "shuffle"
+path = "bins/shuffle.rs"
 
 [[bin]]
-name = "greyscale"
-path = "bins/greyscale.rs"
+name = "base64"
+path = "bins/base64.rs"
+
+[[bin]]
+name = "chess_moves"
+path = "bins/chess_moves.rs"
+
+[[bin]]
+name = "transpose"
+path = "bins/transpose.rs"
+
+[[bin]]
+name = "crc32"
+path = "bins/crc32.rs"
+
+[[bin]]
+name = "quantized_dot"
+path = "bins/quantized_dot.rs"
+
+[[bin]]
+name = "hamming_distance"
+path = "bins/hamming_distance.rs"
+
+[[bin]]
+name = "detect_duplicates"
+path = "bins/detect_duplicates.rs"
+
+[[bin]]
+name = "find_msb"
+path = "bins/find_msb.rs"
+
+[[bin]]
+name = "bit_gather"
+path = "bins/bit_gather.rs"
+
+[[bin]]
+name = "extract_bitfields"
+path = "bins/extract_bitfields.rs"
+
+[[bin]]
+name = "branchless_select"
+path = "bins/branchless_select.rs"
+
+[[bin]]
+name = "pack_saturating"
+path = "bins/pack_saturating.rs"
+
+[[bin]]
+name = "vpermt2"
+path = "bins/vpermt2.rs"
+
+[[bin]]
+name = "vfixupimm"
+path = "bins/vfixupimm.rs"

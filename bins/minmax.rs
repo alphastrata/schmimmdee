@@ -1,10 +1,10 @@
-use rand::Rng;
+use rand::{Rng, thread_rng};
 use std::{hint::black_box, time::Instant};
 
 use schmimmdee::*;
 
 fn main() {
-    let mut rng = rand::rng();
+    let mut rng = thread_rng();
     let sizes = [1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000];
     let trials = 100;
 
@@ -21,7 +21,7 @@ fn main() {
     sizes.iter().for_each(|&size| {
         // Generate random data
         let data: Vec<f32> = (0..size)
-            .map(|_| rng.random_range(-(f32::MIN / 2.0)..f32::MAX))
+            .map(|_| rng.gen_range(-(f32::MAX / 2.0)..f32::MAX))
             .collect();
 
         // warmup to prevent either from winning the benefits of a hot cache.
