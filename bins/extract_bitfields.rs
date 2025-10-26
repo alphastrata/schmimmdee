@@ -66,7 +66,7 @@ fn main() {
 
     // --- Warmup ---
     black_box(multishift_extract_scalar(&data, &controls));
-    black_box(multishift_extract_simd(&data, &controls));
+    black_box(unsafe { multishift_extract_simd(&data, &controls) });
 
     // --- Scalar Benchmark ---
     let scalar_time: u128 = (0..trials)
@@ -81,7 +81,7 @@ fn main() {
     let simd_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            black_box(multishift_extract_simd(&data, &controls));
+            black_box(unsafe { multishift_extract_simd(&data, &controls) });
             start.elapsed().as_nanos()
         })
         .sum();
@@ -92,7 +92,7 @@ fn main() {
 
     // Verification
     let scalar_res = multishift_extract_scalar(&data, &controls);
-    let simd_res = multishift_extract_simd(&data, &controls);
+    let simd_res = unsafe { multishift_extract_simd(&data, &controls) };
     let valid = scalar_res == simd_res;
     if !valid {
         eprintln!("Validation FAILED!");

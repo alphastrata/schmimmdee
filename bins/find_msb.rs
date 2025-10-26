@@ -62,7 +62,7 @@ fn main() {
 
     // --- Warmup ---
     black_box(find_msb_scalar(&data));
-    black_box(find_msb_simd(&data));
+    black_box(unsafe { find_msb_simd(&data) });
 
     // --- Scalar Benchmark ---
     let scalar_time: u128 = (0..trials)
@@ -77,7 +77,7 @@ fn main() {
     let simd_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            black_box(find_msb_simd(&data));
+            black_box(unsafe { find_msb_simd(&data) });
             start.elapsed().as_nanos()
         })
         .sum();
@@ -88,7 +88,7 @@ fn main() {
 
     // Verification
     let scalar_res = find_msb_scalar(&data);
-    let simd_res = find_msb_simd(&data);
+    let simd_res = unsafe { find_msb_simd(&data) };
     let valid = scalar_res == simd_res;
     if !valid {
         eprintln!("Validation FAILED!");

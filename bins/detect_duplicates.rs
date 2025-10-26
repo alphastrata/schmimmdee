@@ -39,7 +39,7 @@ fn main() {
         eprintln!("Warning: AVX-512CD not detected. SIMD implementation will fall back to scalar.");
     }
 
-    const NUM_CHUNKS: usize = 1 * 1024 * 1024; // 1M chunks of 8 u64s
+    const NUM_CHUNKS: usize = 1024 * 1024; // 1M chunks of 8 u64s
     const CHUNK_SIZE: usize = 8;
 
     println!("Generating {} chunks of {} u64s...", format_number(NUM_CHUNKS), CHUNK_SIZE);
@@ -77,7 +77,7 @@ fn main() {
 
     // --- Warmup ---
     black_box(has_duplicates_scalar(&chunks[0]));
-    black_box(has_duplicates_simd(&chunks[0]));
+    black_box(unsafe { has_duplicates_simd(&chunks[0]) });
 
     // --- Scalar Benchmark ---
     let scalar_time: u128 = (0..trials)
@@ -95,7 +95,7 @@ fn main() {
         .map(|_| {
             let start = Instant::now();
             for chunk in &chunks {
-                black_box(has_duplicates_simd(chunk));
+                black_box(unsafe { has_duplicates_simd(chunk) });
             }
             start.elapsed().as_nanos()
         })
@@ -109,7 +109,7 @@ fn main() {
     let mut valid = true;
     for chunk in chunks.iter().take(10000) { // Verify first 10k chunks
         let scalar_res = has_duplicates_scalar(chunk);
-        let simd_res = has_duplicates_simd(chunk);
+        let simd_res = unsafe { has_duplicates_simd(chunk) };
         if scalar_res != simd_res {
             valid = false;
             eprintln!("Validation FAILED for chunk: {:?}", chunk);

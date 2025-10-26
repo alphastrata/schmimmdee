@@ -54,7 +54,7 @@ fn main() {
 
     // Warmup
     black_box(base64_encode_scalar(data_slice));
-    black_box(base64_encode_simd(data_slice));
+    unsafe { black_box(base64_encode_simd(data_slice)) };
 
     // Benchmark
     let scalar_time: u128 = (0..trials)
@@ -68,7 +68,7 @@ fn main() {
     let simd_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            black_box(base64_encode_simd(data_slice));
+            unsafe { black_box(base64_encode_simd(data_slice)) };
             start.elapsed().as_nanos()
         })
         .sum();
@@ -79,7 +79,7 @@ fn main() {
 
     // Verification
     let scalar_result = base64_encode_scalar(data_slice);
-    let simd_result = base64_encode_simd(data_slice);
+    let simd_result = unsafe { base64_encode_simd(data_slice) };
     let valid = scalar_result == simd_result;
     if !valid {
         eprintln!("Validation failed: Scalar and SIMD results do not match.");

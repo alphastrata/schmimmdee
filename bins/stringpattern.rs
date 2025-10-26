@@ -1,10 +1,14 @@
-use schmimmdee::{format_ns, simd_contains_pattern, simd_find_str};
+use schmimmdee::{string_pattern_match_scalar, string_pattern_match_simd, format_ns};
 use std::fs;
 use std::hint::black_box;
 use std::path::Path;
 use std::time::Instant;
 
 fn main() {
+    if !std::is_x86_feature_detected!("sse2") {
+        eprintln!("Warning: SSE2 not detected. SIMD implementation will fall back to scalar.");
+    }
+
     let data_path = "datasets/enwiki-latest-all-titles-in-ns0";
 
     // Check if the data file exists
@@ -46,7 +50,7 @@ fn main() {
         println!("{:-^80}", format!(" {} Search Benchmark ", term));
         println!(
             "| {:>12} | {:>15} | {:>15} | {:>10} | {:>10} |",
-            "Method", "Std Lib", "SIMD", "Speedup", "Valid"
+            "Method", "Scalar", "SIMD", "Speedup", "Valid"
         );
         println!(
             "|{:-^14}|{:-^17}|{:-^17}|{:-^12}|{:-^12}|",
@@ -55,106 +59,49 @@ fn main() {
 
         // Warmup to prevent either from winning the benefits of a hot cache
         (0..3).for_each(|_| {
-            black_box(processed_data.contains(term));
-            black_box(simd_contains_pattern(
-                processed_data.as_bytes(),
-                term.as_bytes(),
-            ));
-            black_box(processed_data.find(term));
-            black_box(simd_find_str(&processed_data, term));
+            black_box(string_pattern_match_scalar(processed_data.as_bytes(), term.as_bytes()));
+            unsafe { black_box(string_pattern_match_simd(processed_data.as_bytes(), term.as_bytes())) };
         });
 
-        // Benchmark contains operations
-        let std_contains_time: u128 = (0..trials)
+        // Benchmark scalar version
+        let scalar_time: u128 = (0..trials)
             .map(|_| {
                 let start = Instant::now();
-                black_box(processed_data.contains(term));
+                black_box(string_pattern_match_scalar(processed_data.as_bytes(), term.as_bytes()));
                 start.elapsed().as_nanos()
             })
             .sum();
 
-        let simd_contains_time: u128 = (0..trials)
+        // Benchmark SIMD version
+        let simd_time: u128 = (0..trials)
             .map(|_| {
                 let start = Instant::now();
-                black_box(simd_contains_pattern(
-                    processed_data.as_bytes(),
-                    term.as_bytes(),
-                ));
+                unsafe { black_box(string_pattern_match_simd(processed_data.as_bytes(), term.as_bytes())) };
                 start.elapsed().as_nanos()
             })
             .sum();
 
-        // Calculate contains averages and speedup
-        let avg_std_contains = std_contains_time as f64 / trials as f64;
-        let avg_simd_contains = simd_contains_time as f64 / trials as f64;
-        let contains_speedup = avg_std_contains / avg_simd_contains;
+        let avg_scalar = scalar_time as f64 / trials as f64;
+        let avg_simd = simd_time as f64 / trials as f64;
+        let speedup = avg_scalar / avg_simd;
 
-        // Verify contains results
-        let std_contains_result = processed_data.contains(term);
-        let simd_contains_result =
-            simd_contains_pattern(processed_data.as_bytes(), term.as_bytes());
-
-        // Assert that results are exactly the same
-        assert_eq!(
-            std_contains_result, simd_contains_result,
-            "Contains results don't match for term '{term}': std={std_contains_result}, simd={simd_contains_result}"
-        );
-
-        let contains_valid = std_contains_result == simd_contains_result;
-
-        // Benchmark find operations
-        let std_find_time: u128 = (0..trials)
-            .map(|_| {
-                let start = Instant::now();
-                black_box(processed_data.find(term));
-                start.elapsed().as_nanos()
-            })
-            .sum();
-
-        let simd_find_time: u128 = (0..trials)
-            .map(|_| {
-                let start = Instant::now();
-                black_box(simd_find_str(&processed_data, term));
-                start.elapsed().as_nanos()
-            })
-            .sum();
-
-        // Calculate find averages and speedup
-        let avg_std_find = std_find_time as f64 / trials as f64;
-        let avg_simd_find = simd_find_time as f64 / trials as f64;
-        let find_speedup = avg_std_find / avg_simd_find;
-
-        // Verify find results
-        let std_find_result = processed_data.find(term);
-        let simd_find_result = simd_find_str(&processed_data, term);
-
-        // Assert that results are exactly the same
-        assert_eq!(
-            std_find_result, simd_find_result,
-            "Find results don't match for term '{term}': std={std_find_result:?}, simd={simd_find_result:?}"
-        );
-
-        let find_valid = std_find_result == simd_find_result;
-
-        // Print formatted results
-        println!(
-            "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
-            "contains",
-            format_ns(avg_std_contains),
-            format_ns(avg_simd_contains),
-            contains_speedup,
-            if contains_valid { "✓" } else { "✗" }
-        );
+        // Verification
+        let scalar_res = string_pattern_match_scalar(processed_data.as_bytes(), term.as_bytes());
+        let simd_res = unsafe { string_pattern_match_simd(processed_data.as_bytes(), term.as_bytes()) };
+        let valid = scalar_res == simd_res;
+        if !valid {
+            eprintln!("Validation FAILED!");
+        }
+        assert!(valid, "Results do not match!");
 
         println!(
             "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
-            "find",
-            format_ns(avg_std_find),
-            format_ns(avg_simd_find),
-            find_speedup,
-            if find_valid { "✓" } else { "✗" }
+            "string_match",
+            format_ns(avg_scalar),
+            format_ns(avg_simd),
+            speedup,
+            if valid { "✓" } else { "✗" }
         );
-
         println!("{:-^80}", "");
         println!();
     }

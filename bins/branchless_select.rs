@@ -17,7 +17,7 @@
 /// this can lead to branches, but `VPTERNLOG` can compute it for all 512 bits
 /// in parallel with a single instruction and the immediate `0xD8`.
 
-use schmimmdee::{select_u32_scalar, select_u32_simd, format_ns, format_number};
+use schmimmdee::{branchless_select_scalar, branchless_select_simd, format_ns, format_number};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::hint::black_box;
@@ -32,9 +32,9 @@ fn main() {
 
     println!("Generating three vectors of {} u32 elements...", format_number(VECTOR_SIZE));
     let mut rng = StdRng::seed_from_u64(42);
-    let vec_a: Vec<u32> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
-    let vec_b: Vec<u32> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
-    let vec_c: Vec<u32> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
+    let vec_a: Vec<u64> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
+    let vec_b: Vec<u64> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
+    let vec_c: Vec<u64> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
     println!("Done.\n");
 
     let trials = 10;
@@ -50,14 +50,16 @@ fn main() {
     );
 
     // --- Warmup ---
-    black_box(select_u32_scalar(&vec_a, &vec_b, &vec_c));
-    black_box(select_u32_simd(&vec_a, &vec_b, &vec_c));
+    black_box(branchless_select_scalar(vec_a[0], vec_b[0], vec_c[0]));
+    unsafe { black_box(branchless_select_simd(&vec_a, &vec_b, &vec_c)) };
 
     // --- Scalar Benchmark ---
     let scalar_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            black_box(select_u32_scalar(&vec_a, &vec_b, &vec_c));
+            for i in 0..VECTOR_SIZE {
+                black_box(branchless_select_scalar(vec_a[i], vec_b[i], vec_c[i]));
+            }
             start.elapsed().as_nanos()
         })
         .sum();
@@ -66,7 +68,7 @@ fn main() {
     let simd_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            black_box(select_u32_simd(&vec_a, &vec_b, &vec_c));
+            unsafe { black_box(branchless_select_simd(&vec_a, &vec_b, &vec_c)) };
             start.elapsed().as_nanos()
         })
         .sum();
@@ -76,9 +78,16 @@ fn main() {
     let speedup = avg_scalar / avg_simd;
 
     // Verification
-    let scalar_res = select_u32_scalar(&vec_a, &vec_b, &vec_c);
-    let simd_res = select_u32_simd(&vec_a, &vec_b, &vec_c);
-    let valid = scalar_res == simd_res;
+    let mut valid = true;
+    for i in 0..VECTOR_SIZE {
+        let scalar_res = branchless_select_scalar(vec_a[i], vec_b[i], vec_c[i]);
+        let simd_res = unsafe { branchless_select_simd(&vec_a, &vec_b, &vec_c) };
+        if scalar_res != simd_res[i] {
+            valid = false;
+            eprintln!("Validation FAILED at index {}: scalar={}, simd={}", i, scalar_res, simd_res[i]);
+            break;
+        }
+    }
     assert!(valid, "Results do not match!");
 
     println!(

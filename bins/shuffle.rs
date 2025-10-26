@@ -2,7 +2,7 @@ use std::arch::x86_64::*;
 use std::env;
 use std::path::Path;
 use std::time::Instant;
-use image::{io::Reader as ImageReader, GenericImageView, ImageBuffer, Rgba};
+use image::io::Reader as ImageReader;
 
 /// SIMD implementation of RGBA → ARGB conversion.
 /// Works only on x86_64 with SSSE3 support.
@@ -28,8 +28,8 @@ fn shuffle_rgba_to_argb_naive(chunk: &[u8]) -> [u8; 16] {
     let mut out = [0u8; 16];
     for i in 0..4 {
         let base = i * 4;
-        out[i * 4 + 0] = chunk[base + 3]; // A
-        out[i * 4 + 1] = chunk[base + 0]; // R
+        out[(i * 4)] = chunk[base + 3]; // A
+        out[i * 4 + 1] = chunk[base]; // R
         out[i * 4 + 2] = chunk[base + 1]; // G
         out[i * 4 + 3] = chunk[base + 2]; // B
     }

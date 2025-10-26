@@ -20,15 +20,15 @@ fn main() {
 
     sizes.iter().for_each(|&size| {
         // Generate random data
-        let data: Vec<f32> = (0..size)
-            .map(|_| rng.gen_range(-(f32::MAX / 2.0)..f32::MAX))
+        let data: Vec<u32> = (0..size)
+            .map(|_| rng.gen_range(0..u32::MAX))
             .collect();
 
         // warmup to prevent either from winning the benefits of a hot cache.
         (0..3).for_each(|_| {
             black_box({
-                _ = find_min_max_scalar(&data);
-                _ = find_min_max_simd(&data);
+                _ = minmax_scalar(&data);
+                _ = unsafe { minmax_simd(&data) };
             });
         });
 
@@ -36,7 +36,7 @@ fn main() {
         let scalar_time: u128 = (0..trials)
             .map(|_| {
                 let start = Instant::now();
-                black_box(find_min_max_scalar(&data));
+                black_box(minmax_scalar(&data));
                 start.elapsed().as_nanos()
             })
             .sum();
@@ -45,7 +45,7 @@ fn main() {
         let simd_time: u128 = (0..trials)
             .map(|_| {
                 let start = Instant::now();
-                black_box(find_min_max_simd(&data));
+                black_box(unsafe { minmax_simd(&data) });
                 start.elapsed().as_nanos()
             })
             .sum();
@@ -56,8 +56,8 @@ fn main() {
         let speedup = avg_scalar / avg_simd;
 
         // Verify results
-        let (simd_min, simd_max) = find_min_max_simd(&data);
-        let (scalar_min, scalar_max) = find_min_max_scalar(&data);
+        let (simd_min, simd_max) = unsafe { minmax_simd(&data) };
+        let (scalar_min, scalar_max) = minmax_scalar(&data);
         let valid = simd_min == scalar_min && simd_max == scalar_max;
 
         // Print formatted results

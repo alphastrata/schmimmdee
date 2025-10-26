@@ -71,7 +71,7 @@ fn main() {
         .map(|_| {
             let start = Instant::now();
             for block in &matrices {
-                black_box(transpose_8x8_u32_simd(block));
+                black_box(unsafe { transpose_8x8_u32_simd(block) });
             }
             start.elapsed().as_nanos()
         })
@@ -83,7 +83,7 @@ fn main() {
 
     // Verification
     let scalar_res = transpose_8x8_u32_scalar(&matrices[0]);
-    let simd_res = transpose_8x8_u32_simd(&matrices[0]);
+    let simd_res = unsafe { transpose_8x8_u32_simd(&matrices[0]) };
     let valid = scalar_res == simd_res;
     assert!(valid, "Results do not match!");
 

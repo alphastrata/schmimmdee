@@ -23,29 +23,26 @@
 /// The SIMD function contains a `todo!()` placeholder where the intrinsic call
 /// would be. The benchmark will therefore not show a speedup until this is resolved.
 
-use schmimmdee::{gather_bits_scalar, gather_bits_simd, format_ns, format_number};
+use schmimmdee::{vpshufbitqmb_scalar, vpshufbitqmb_simd, format_ns, format_number};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::hint::black_box;
 use std::time::Instant;
 
 fn main() {
-    if !std::is_x86_feature_detected!("avx512bitalg") {
+    if !std::is_x86_feature_detected!("avx512vbmi2") {
         eprintln!("Warning: AVX-512 BITALG not detected. SIMD implementation will fall back to scalar.");
     }
 
-    const NUM_BLOCKS: usize = 1 * 1024 * 1024; // 1M blocks of 8 u64s
+    const NUM_BLOCKS: usize = 1024 * 1024; // 1M blocks of 8 u64s
     const BLOCK_SIZE: usize = 8;
 
     println!("Generating {} blocks of {} u64s...", format_number(NUM_BLOCKS), BLOCK_SIZE);
     let mut rng = StdRng::seed_from_u64(42);
-    let data: Vec<[u64; BLOCK_SIZE]> = (0..NUM_BLOCKS)
-        .map(|_| [0u64; BLOCK_SIZE].map(|_| rng.gen()))
-        .collect();
+    let data: Vec<u64> = (0..NUM_BLOCKS * BLOCK_SIZE).map(|_| rng.gen()).collect();
     
-    let mut indices = [0u8; 8];
-    for i in 0..8 { indices[i] = rng.gen_range(0..64); }
-    println!("Gathering bits at indices: {:?}\n", indices);
+    let control: Vec<u64> = (0..NUM_BLOCKS * BLOCK_SIZE).map(|_| rng.gen()).collect();
+    println!("Done.\n");
 
     let trials = 10;
 
@@ -60,42 +57,48 @@ fn main() {
     );
 
     // --- Warmup ---
-    black_box(gather_bits_scalar(&data, &indices));
-    // SIMD version will panic due to todo!(), so we can't warm it up directly
-    // black_box(gather_bits_simd(&data, &indices));
+    black_box(vpshufbitqmb_scalar(&data, &control));
+    unsafe { black_box(vpshufbitqmb_simd(&data, &control)) };
 
     // --- Scalar Benchmark ---
     let scalar_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            black_box(gather_bits_scalar(&data, &indices));
+            black_box(vpshufbitqmb_scalar(&data, &control));
             start.elapsed().as_nanos()
         })
         .sum();
 
     // --- SIMD Benchmark ---
-    // We expect this to panic. The purpose is to have the code in place.
-    let simd_result = std::panic::catch_unwind(|| {
-        gather_bits_simd(&data, &indices)
-    });
+    let simd_time: u128 = (0..trials)
+        .map(|_| {
+            let start = Instant::now();
+            unsafe { black_box(vpshufbitqmb_simd(&data, &control)) };
+            start.elapsed().as_nanos()
+        })
+        .sum();
 
     let avg_scalar = scalar_time as f64 / trials as f64;
-    
-    // Verification is not possible as the SIMD version panics.
-    let valid = false;
+    let avg_simd = simd_time as f64 / trials as f64;
+    let speedup = avg_scalar / avg_simd;
+
+    // Verification
+    let scalar_res = vpshufbitqmb_scalar(&data, &control);
+    let simd_res = unsafe { vpshufbitqmb_simd(&data, &control) };
+    let valid = scalar_res == simd_res;
+    if !valid {
+        eprintln!("Validation FAILED!");
+    }
+    assert!(valid, "Results do not match!");
 
     println!(
         "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
-        "gather_bits",
+        "vpshufbitqmb",
         format_ns(avg_scalar),
-        "(unimplemented)",
-        0.0,
+        format_ns(avg_simd),
+        speedup,
         if valid { "✓" } else { "✗" }
     );
     println!("{:-^80}", "");
-    match simd_result {
-        Ok(_) => println!("Note: SIMD function did not panic as expected."),
-        Err(_) => println!("Note: SIMD function panicked as expected due to missing intrinsic."),
-    }
     println!("\nBenchmark complete!");
 }

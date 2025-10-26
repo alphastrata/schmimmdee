@@ -1,24 +1,26 @@
-use schmimmdee::{greyscale_scalar, greyscale_simd, format_ns, format_number};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
+use std::hint::black_box;
 use std::time::Instant;
 
+use schmimmdee::{vpshufbitqmb_scalar, vpshufbitqmb_simd, format_ns, format_number};
+
 fn main() {
-    if !std::is_x86_feature_detected!("sse2") {
-        eprintln!("Warning: SSE2 not detected. SIMD implementation will fall back to scalar.");
+    if !std::is_x86_feature_detected!("avx512vbmi2") {
+        eprintln!("Warning: AVX-512VBMI2 not detected. SIMD implementation will fall back to scalar.");
     }
 
-    const IMAGE_SIZE: usize = 1920 * 1080 * 4; // Full HD RGBA image
+    const VECTOR_SIZE: usize = 16 * 1024 * 1024; // 16M u64s
 
-    println!("Generating an image of {} bytes...", format_number(IMAGE_SIZE));
+    println!("Generating data and control vectors of {} u64 elements...", format_number(VECTOR_SIZE));
     let mut rng = StdRng::seed_from_u64(42);
-    let mut pixels: Vec<u8> = (0..IMAGE_SIZE).map(|_| rng.gen()).collect();
-    let mut pixels_clone = pixels.clone();
+    let data: Vec<u64> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect();
+    let control: Vec<u64> = (0..VECTOR_SIZE).map(|_| rng.gen()).collect(); // Placeholder control
     println!("Done.\n");
 
     let trials = 10;
 
-    println!("{:-^80}", " Greyscale Conversion Benchmark ");
+    println!("{:-^80}", " VPSHUFBITQMB Benchmark ");
     println!(
         "| {:>12} | {:>15} | {:>15} | {:>10} | {:>10} |",
         "Method", "Scalar", "SIMD", "Speedup", "Valid"
@@ -29,14 +31,14 @@ fn main() {
     );
 
     // --- Warmup ---
-    greyscale_scalar(&mut pixels);
-    unsafe { greyscale_simd(&mut pixels_clone) };
+    black_box(vpshufbitqmb_scalar(&data, &control));
+    black_box(vpshufbitqmb_simd(&data, &control));
 
     // --- Scalar Benchmark ---
     let scalar_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            greyscale_scalar(&mut pixels);
+            black_box(vpshufbitqmb_scalar(&data, &control));
             start.elapsed().as_nanos()
         })
         .sum();
@@ -45,7 +47,7 @@ fn main() {
     let simd_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
-            unsafe { greyscale_simd(&mut pixels_clone) };
+            black_box(vpshufbitqmb_simd(&data, &control));
             start.elapsed().as_nanos()
         })
         .sum();
@@ -55,9 +57,9 @@ fn main() {
     let speedup = avg_scalar / avg_simd;
 
     // Verification
-    greyscale_scalar(&mut pixels); // Ensure pixels is in a known state
-    unsafe { greyscale_simd(&mut pixels_clone) };
-    let valid = pixels == pixels_clone;
+    let scalar_res = vpshufbitqmb_scalar(&data, &control);
+    let simd_res = vpshufbitqmb_simd(&data, &control);
+    let valid = scalar_res == simd_res;
     if !valid {
         eprintln!("Validation FAILED!");
     }
@@ -65,7 +67,7 @@ fn main() {
 
     println!(
         "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
-        "greyscale",
+        "vpshufbitqmb",
         format_ns(avg_scalar),
         format_ns(avg_simd),
         speedup,

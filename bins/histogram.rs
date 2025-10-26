@@ -1,5 +1,4 @@
-#![allow(unused_imports)]
-use schmimmdee::{format_ns, format_number, simd_histogram_parallel, simd_histogram_single};
+use schmimmdee::{histogram_scalar, histogram_simd, format_ns, format_number};
 use std::{collections::HashMap, fs, hint::black_box, path::Path, time::Instant};
 
 fn main() {
@@ -53,7 +52,7 @@ fn main() {
     println!("\n{:-^80}", " Histogram Benchmark Results ");
     println!(
         "| {:>12} | {:>15} | {:>15} | {:>10} | {:>10} |",
-        "Elements", "Standard", "SIMD", "Speedup", "Valid"
+        "Elements", "Scalar", "SIMD", "Speedup", "Valid"
     );
     println!(
         "|{:-^14}|{:-^17}|{:-^17}|{:-^12}|{:-^12}|",
@@ -69,21 +68,15 @@ fn main() {
 
         // Warmup to prevent cache effects
         for _ in 0..3 {
-            let mut warmup_hist1 = [0u32; 256];
-            let mut warmup_hist2 = [0u32; 256];
-            standard_histogram(data_slice, &mut warmup_hist1);
-            black_box(());
-            simd_histogram_single(data_slice, &mut warmup_hist2);
-            black_box(());
+            black_box(histogram_scalar(data_slice));
+            unsafe { black_box(histogram_simd(data_slice)) };
         }
 
-        // Benchmark standard version
-        let standard_time: u128 = (0..trials)
+        // Benchmark scalar version
+        let scalar_time: u128 = (0..trials)
             .map(|_| {
-                let mut hist = [0u32; 256];
                 let start = Instant::now();
-                standard_histogram(data_slice, &mut hist);
-                black_box(());
+                black_box(histogram_scalar(data_slice));
                 start.elapsed().as_nanos()
             })
             .sum();
@@ -91,30 +84,20 @@ fn main() {
         // Benchmark SIMD version
         let simd_time: u128 = (0..trials)
             .map(|_| {
-                #[allow(unused_mut)]
-                let mut hist = [0u32; 256];
                 let start = Instant::now();
-                // NOTE: these are actually ALL universally worse (on all my machines).
-
-                simd_histogram_single(data_slice, &mut hist);
-                // schmimmdee::simd_histogram_unsafe(data_slice, &mut hist);
-                // simd_histogram_parallel(data_slice, &mut [hist]);
-
-                black_box(());
+                unsafe { black_box(histogram_simd(data_slice)) };
                 start.elapsed().as_nanos()
             })
             .sum();
 
         // Calculate averages and speedup
-        let avg_standard = standard_time as f64 / trials as f64;
+        let avg_scalar = scalar_time as f64 / trials as f64;
         let avg_simd = simd_time as f64 / trials as f64;
-        let speedup = avg_standard / avg_simd;
+        let speedup = avg_scalar / avg_simd;
 
         // Verify results match
-        let mut std_hist = [0u32; 256];
-        let mut simd_hist = [0u32; 256];
-        standard_histogram(data_slice, &mut std_hist);
-        simd_histogram_single(data_slice, &mut simd_hist);
+        let std_hist = histogram_scalar(data_slice);
+        let simd_hist = unsafe { histogram_simd(data_slice) };
         let valid = std_hist == simd_hist;
         assert!(valid);
 
@@ -122,7 +105,7 @@ fn main() {
         println!(
             "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
             format_number(size),
-            format_ns(avg_standard),
+            format_ns(avg_scalar),
             format_ns(avg_simd),
             speedup,
             if valid { "✓" } else { "✗" }
@@ -139,10 +122,4 @@ fn create_word_counts(text: &str) -> HashMap<String, u32> {
             *counts.entry(word.to_lowercase()).or_insert(0) += 1;
             counts
         })
-}
-
-fn standard_histogram(data: &[u8], histogram: &mut [u32; 256]) {
-    for &byte in data {
-        histogram[byte as usize] += 1;
-    }
 }

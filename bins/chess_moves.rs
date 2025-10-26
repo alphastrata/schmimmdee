@@ -31,10 +31,7 @@
 /// with a single instruction and a memory lookup. The PDEP instruction is the
 /// logical inverse and is useful for creating the attack tables themselves.
 
-use schmimmdee::{
-    format_ns, format_number, rook_moves_pext, rook_moves_scalar,
-    init_rook_attack_tables,
-};
+use schmimmdee::{generate_pawn_moves_scalar, generate_pawn_moves_simd, init_rook_attack_tables, format_ns, format_number};
 use std::hint::black_box;
 use std::time::Instant;
 
@@ -58,10 +55,10 @@ fn main() {
         0b1000000010001000000000100001, // Random-ish
     ];
 
-    println!("{:-^80}", " Chess Rook Move Generation (PEXT) ");
+    println!("{:-^80}", " Chess Pawn Move Generation (PDEP/PEXT) ");
     println!(
         "| {:>12} | {:>15} | {:>15} | {:>10} | {:>10} |",
-        "Method", "Scalar", "PEXT", "Speedup", "Valid"
+        "Method", "Scalar", "SIMD", "Speedup", "Valid"
     );
     println!(
         "|{:-^14}|{:-^17}|{:-^17}|{:-^12}|{:-^12}|",
@@ -69,9 +66,9 @@ fn main() {
     );
 
     // Warmup
-    black_box(rook_moves_scalar(0, occupancy_patterns[3]));
+    black_box(generate_pawn_moves_scalar(0, 0, occupancy_patterns[3]));
     unsafe {
-        black_box(rook_moves_pext(0, occupancy_patterns[3]));
+        black_box(generate_pawn_moves_simd(0, 0, occupancy_patterns[3]));
     }
 
     // Benchmark
@@ -80,20 +77,20 @@ fn main() {
             let start = Instant::now();
             for &occupancy in &occupancy_patterns {
                 for square in 0..squares_to_test {
-                    black_box(rook_moves_scalar(square as u8, occupancy));
+                    black_box(generate_pawn_moves_scalar(1 << square, 0, occupancy));
                 }
             }
             start.elapsed().as_nanos()
         })
         .sum();
 
-    let pext_time: u128 = (0..trials)
+    let simd_time: u128 = (0..trials)
         .map(|_| {
             let start = Instant::now();
             for &occupancy in &occupancy_patterns {
                 for square in 0..squares_to_test {
                     unsafe {
-                        black_box(rook_moves_pext(square as u8, occupancy));
+                        black_box(generate_pawn_moves_simd(1 << square, 0, occupancy));
                     }
                 }
             }
@@ -103,20 +100,20 @@ fn main() {
 
     let total_ops = (trials * squares_to_test * occupancy_patterns.len()) as f64;
     let avg_scalar_per_op = scalar_time as f64 / total_ops;
-    let avg_pext_per_op = pext_time as f64 / total_ops;
-    let speedup = avg_scalar_per_op / avg_pext_per_op;
+    let avg_simd_per_op = simd_time as f64 / total_ops;
+    let speedup = avg_scalar_per_op / avg_simd_per_op;
 
     // Verification
     let mut valid = true;
     'outer: for &occupancy in &occupancy_patterns {
         for square in 0..squares_to_test {
-            let scalar_moves = rook_moves_scalar(square as u8, occupancy);
-            let pext_moves = unsafe { rook_moves_pext(square as u8, occupancy) };
-            if scalar_moves != pext_moves {
+            let scalar_moves = generate_pawn_moves_scalar(1 << square, 0, occupancy);
+            let simd_moves = unsafe { generate_pawn_moves_simd(1 << square, 0, occupancy) };
+            if scalar_moves != simd_moves {
                 valid = false;
                 eprintln!("Validation failed for square {} with occupancy {:x}", square, occupancy);
                 eprintln!("Scalar: {:064b}", scalar_moves);
-                eprintln!("PEXT:   {:064b}", pext_moves);
+                eprintln!("SIMD:   {:064b}", simd_moves);
                 break 'outer;
             }
         }
@@ -125,9 +122,9 @@ fn main() {
 
     println!(
         "| {:>12} | {:>15} | {:>15} | {:>9.2}x | {:>9} |",
-        "rook_moves",
+        "pawn_moves",
         format_ns(avg_scalar_per_op),
-        format_ns(avg_pext_per_op),
+        format_ns(avg_simd_per_op),
         speedup,
         if valid { "✓" } else { "✗" }
     );
